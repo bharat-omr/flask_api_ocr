@@ -33,7 +33,7 @@ def evaluate_question_answer(question, user_answer):
     
     Provide the evaluation in this format:
     1. **Score**: (numerical score out of 100)
-    2. **Feedback**: (Only give clarity or mistake two or three sentence)
+    2. **Feedback**: (Only give clarity or mistake two or three sentence or also give feedback in same as question language if question language is hindi so give feedback in hindi.)
     """
 
     
