@@ -14,15 +14,15 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 app = Flask(__name__)
 
 # Configure SerpAPIWrapper
-os.environ["SERPAPI_API_KEY"]
-search = SerpAPIWrapper()  
-
+#os.environ["SERPAPI_API_KEY"]
+#search = SerpAPIWrapper()  
+#serp :{serp_result}
 # Function to evaluate a single question-answer pair using the LLM
 def evaluate_question_answer(question, user_answer):
     """
     Evaluate a question-answer pair and return a score and feedback extracted from the model's response.
     """
-    serp_result = search.run(question)
+    #serp_result = search.run(question)
     # Prepare the prompt for evaluation
     prompt = f"""
     Evaluate the following question and user's answer:
@@ -30,10 +30,10 @@ def evaluate_question_answer(question, user_answer):
 
     Question: {question}
     User's Answer: {user_answer} answer should be in technically solve and breif answer is not mcq based.
-    serp :{serp_result}
+    
     Provide the evaluation in this format:
     1. **Score**: (numerical score out of 100)
-    2. **Feedback**: (detailed feedback text)
+    2. **Feedback**: (Only give clarity or mistake two or three sentence)
     """
 
     
