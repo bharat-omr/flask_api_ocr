@@ -27,7 +27,7 @@ def evaluate_question_answer(question, user_answer):
     prompt = f"""
     Evaluate the following question and user's answer:
     if you have not real-time knowledge of question so use this serp API result data
-
+    
     Question: {question}
     User's Answer: {user_answer} answer should be in technically solve and breif answer is not mcq based.
     
@@ -35,7 +35,7 @@ def evaluate_question_answer(question, user_answer):
     1. **Score**: (numerical score out of 100)
     2. **Feedback**: (Only give clarity or mistake two or three sentence or also give feedback in same as question language if question language is hindi so give feedback in hindi.)
     """
-
+    
     
     try:
         # Generate content with the model

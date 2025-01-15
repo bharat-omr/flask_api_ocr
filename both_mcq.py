@@ -1,6 +1,5 @@
 from flask import Flask, request, jsonify
 import google.generativeai as genai
-from langchain_community.utilities import SerpAPIWrapper
 import os
 import re
 
@@ -8,49 +7,39 @@ import re
 genai.configure(api_key=os.environ.get("GOOGLE_AI_API_KEY"))
 # Initialize the model
 model = genai.GenerativeModel("gemini-1.5-flash")
-
-# Flask app initialization
 app = Flask(__name__)
-
-# Configure SerpAPIWrapper
-os.environ["SERPAPI_API_KEY"]
-search = SerpAPIWrapper()
-
-
-# Function to evaluate a question-answer pair
-def evaluate_question_answer(question, user_answer, question_type):
+# Function to evaluate a single question-answer pair using the LLM
+def evaluate_question_answer(question, user_answer, class_name, board, word_count):
     """
-    Evaluate a question-answer pair based on its type (MCQ or Paragraph).
+    Evaluate a question-answer pair and return a score and feedback extracted from the model's response.
     """
-    serp_result = search.run(question)
-    
-    # Prepare the prompt based on question type
-    if question_type == "MCQ":
-        prompt = f"""
-        Evaluate the following Multiple Choice Question (MCQ) and user's selected answer:
-        
-        Question: {question}
-        User's Answer: {user_answer}
-        serp_API: {serp_result} (if LLM lacks real-time knowledge, use this result to evaluate the answer.)
-        
-        Provide the evaluation in this format:
-        1. **Score**: (Numerical score out of 100)
-        2. **Feedback**: (Detailed feedback for MCQ evaluation.)
-        """
-    else:  # Assume Paragraph-based question
-        prompt = f"""
-        Evaluate the following paragraph-based question and user's answer:
-        
-        Question: {question}
-        User's Answer: {user_answer}
-        serp_API: {serp_result} (if LLM lacks real-time knowledge, use this result to evaluate the answer.)
-        
-        Provide the evaluation in this format:
-        
-        1. **Score**: (Numerical score out of 100 based on accuracy, relevance, and depth.)
-        2. **Feedback**: (Detailed feedback for paragraph-based evaluation.)
-        """
-    
+    prompt = f"""
+Evaluate the given question and user's answer based on the following context:
+
+Class: {class_name}
+Board: {board}
+Expected Word Count: {word_count}
+
+Instructions:
+1. Verify if the user's answer adheres to the expected word count ({word_count}). If the word count matches or exceeds the requirement, proceed to evaluate the answer based on its correctness, clarity, and completeness.
+2. If the user's answer has fewer words than required, deduct marks appropriately and provide feedback explaining the shortfall.
+3. If there are minor mistakes in the user's answer (0-10% of the content), do not penalize the score but in maths not use this. Focus instead on constructive feedback to address the minor inaccuracies.
+4. If the question or answer is correct in one word and matches the expected accuracy, assign a score of 100 instead of 95.
+5. For mathematical answers:
+   - Penalize minor errors (0-10%) by reducing the score based on the level of accuracy. Even small inaccuracies (e.g., in calculations or results) should impact the score.
+   - Provide feedback explaining where the mistake occurred and how to correct it.
+   
+Question: {question}
+User's Answer: {user_answer}
+
+Provide the output in the following format:
+
+1. **Score**: (Numerical score out of 100, calculated based on adherence to word count, accuracy, clarity, and completeness. Minor mistakes (0-10%) should not heavily impact the score.)
+2. **Feedback**: (Provide 2-3 sentences highlighting the strengths and areas for improvement. If the question is in a specific language, give the feedback in the same language.)
+"""
+
+
+
     try:
         # Generate content with the model
         response = model.generate_content(prompt)
@@ -65,59 +54,67 @@ def evaluate_question_answer(question, user_answer, question_type):
         feedback = feedback_match.group(1).strip() if feedback_match else "No feedback provided."
 
         return {
-            "Question Type": question_type,
             "Score": score,
             "Feedback": feedback
         }
     except Exception as e:
         return {
-            "Question Type": question_type,
             "Score": 0,
             "Feedback": f"Error processing answer: {str(e)}"
         }
 
-
+# Flask route to evaluate user answers
 @app.route('/evaluate', methods=['POST'])
 def evaluate():
     """
     Endpoint to evaluate question-answer pairs.
-    Expects a JSON payload with lists of questions and answers.
+    Expects a JSON payload with the format:
+    {
+        "Class": "10th",
+        "Board": "CBSE",
+        "Type": "one mark",
+        "questions": [
+            {"ID": "1", "Text": "Where is India located?"}
+        ],
+        "answers": [
+            {"ID": "1", "Text": "India is in USA"}
+        ]
+    }
     """
     try:
+        # Get the JSON data from the request
         data = request.json
+        class_name = data.get("Class", "")
+        board = data.get("Board", "")
+        word_count = data.get("word_count", "")
         questions = data.get("questions", [])
         answers = data.get("answers", [])
-        
-        # Validate input
+
+        # Validate the input
         if not questions or not answers or len(questions) != len(answers):
             return jsonify({"error": "Invalid input. Ensure matching lists of questions and answers."}), 400
 
         evaluations = []
         for question, answer in zip(questions, answers):
-            if "ID" not in question or "Text" not in question or "Type" not in question or "ID" not in answer or "Text" not in answer:
-                return jsonify({"error": "Missing 'ID', 'Text', or 'Type' in question/answer."}), 400
-            
-            question_text = question["Text"]
-            answer_text = answer["Text"]
-            question_type = question["Type"]  # "MCQ" or "Paragraph"
+            # Ensure each question and answer has the required fields
+            if "ID" not in question or "Text" not in question or "ID" not in answer or "Text" not in answer:
+                return jsonify({"error": "Missing 'ID' or 'Text' in question/answer."}), 400
 
-            # Evaluate question-answer pair
-            evaluation = evaluate_question_answer(question_text, answer_text, question_type)
+            # Evaluate the question-answer pair
+            evaluation = evaluate_question_answer(
+                question["Text"], answer["Text"], class_name, board, word_count
+            )
             evaluations.append({"ID": question["ID"], "Evaluation": evaluation})
-        
+            
+        print(f"Evaluations: {evaluations}")
         return jsonify({"evaluations": evaluations}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route("/hello", methods=["GET"])
 def hello():
-    """
-    Health check route.
-    """
-    return jsonify({"message": "Server is running", "status": "OK"})
-
+    return jsonify({"message": "hello"})
 
 # Run the Flask app
 if __name__ == '__main__':
